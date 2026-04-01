@@ -107,6 +107,13 @@ class LogIngest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
 
+class ChatMessage(BaseModel):
+    session_id: str
+    content: str
+
+class SessionCreate(BaseModel):
+    title: str
+
 # ─── APP SETUP ─────────────────────────────────────────────────────────────────
 app = FastAPI(title="ShiftSync Industrial Backend", version="6.0.0")
 pwd_context   = CryptContext(schemes=["pbkdf2_sha256"], pbkdf2_sha256__rounds=1000)
@@ -615,6 +622,165 @@ async def get_stats(cu: User = Depends(get_current_user)):
         "logsWithAudio":   with_audio,
         "totalResolutions":total,
     }
+
+# ─── CHAT API ──────────────────────────────────────────────────────────────
+@app.get("/api/v1/sessions/{user_id}")
+async def get_user_sessions(user_id: str, cu: User = Depends(get_current_user)):
+    """Fetch all chat sessions for a user (sidebar history)."""
+    async with driver.session(database=NEO4J_DB) as s:
+        res = await s.run("""
+            MATCH (u:Technician {username:$user})-[:OWNS]->(sess:Session)
+            RETURN sess.id AS id,
+                   sess.title AS title,
+                   sess.status AS status,
+                   toString(sess.created) AS created
+            ORDER BY sess.created DESC
+        """, user=user_id)
+        return await res.data()
+
+@app.get("/api/v1/chat/{session_id}")
+async def get_chat_thread(session_id: str, cu: User = Depends(get_current_user)):
+    """Load all messages in a specific chat session."""
+    async with driver.session(database=NEO4J_DB) as s:
+        res = await s.run("""
+            MATCH (sess:Session {id:$sid})-[:CONTAINS]->(m:Message)
+            OPTIONAL MATCH (m)-[:REFERENCES]->(e:Equipment)-[:HAS_PROTOCOL]->(p:Protocol)
+            RETURN m.id AS id,
+                   m.sender AS sender,
+                   m.content AS content,
+                   toString(m.timestamp) AS timestamp,
+                   m.order AS order,
+                   m.protocolId AS protocolId,
+                   p.title AS protocolTitle,
+                   p.steps AS protocolSteps,
+                   p.audioUrl AS audioUrl,
+                   p.duration AS duration,
+                   p.safetyNote AS safetyNote
+            ORDER BY m.order ASC
+        """, sid=session_id)
+        return await res.data()
+
+@app.post("/api/v1/chat/message")
+async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_user)):
+    """Send a new message and get AI response with structured protocol data."""
+    user_msg_id = str(uuid.uuid4())
+    bot_msg_id = str(uuid.uuid4())
+    
+    # Extract equipment mention from user message
+    content_lower = msg.content.lower()
+    equipment_name = None
+    protocol_data = None
+    
+    if "pump 3" in content_lower or "pump3" in content_lower:
+        equipment_name = "Pump 3"
+    elif "hvac" in content_lower:
+        equipment_name = "HVAC Unit 2"
+    elif "valve" in content_lower:
+        equipment_name = "Safety Valve SV-101"
+    
+    async with driver.session(database=NEO4J_DB) as s:
+        # Get current message count
+        count_res = await s.run("""
+            MATCH (sess:Session {id:$sid})-[:CONTAINS]->(m:Message)
+            RETURN count(m) AS cnt
+        """, sid=msg.session_id)
+        count_rec = await count_res.single()
+        next_order = (count_rec["cnt"] if count_rec else 0) + 1
+        
+        # Save user message
+        await s.run("""
+            MATCH (sess:Session {id:$sid})
+            CREATE (m:Message {
+                id: $mid,
+                sender: 'user',
+                content: $content,
+                timestamp: datetime(),
+                order: $order
+            })
+            MERGE (sess)-[:CONTAINS]->(m)
+        """, sid=msg.session_id, mid=user_msg_id, content=msg.content, order=next_order)
+        
+        # If equipment mentioned, fetch protocol
+        if equipment_name:
+            proto_res = await s.run("""
+                MATCH (e:Equipment {name:$eq})-[:HAS_PROTOCOL]->(p:Protocol)
+                RETURN p.id AS id,
+                       p.title AS title,
+                       p.steps AS steps,
+                       p.audioUrl AS audioUrl,
+                       p.duration AS duration,
+                       p.safetyNote AS safetyNote
+                LIMIT 1
+            """, eq=equipment_name)
+            proto_rec = await proto_res.single()
+            if proto_rec:
+                protocol_data = dict(proto_rec)
+        
+        # Generate bot response
+        if protocol_data:
+            bot_content = f"I found the protocol for {equipment_name}. Here are the steps:"
+            # Save bot message with protocol reference
+            await s.run("""
+                MATCH (sess:Session {id:$sid}), (e:Equipment {name:$eq})
+                CREATE (m:Message {
+                    id: $mid,
+                    sender: 'bot',
+                    content: $content,
+                    timestamp: datetime(),
+                    order: $order,
+                    protocolId: $pid
+                })
+                MERGE (sess)-[:CONTAINS]->(m)
+                MERGE (m)-[:REFERENCES]->(e)
+            """, sid=msg.session_id, mid=bot_msg_id, content=bot_content, 
+                 order=next_order+1, eq=equipment_name, pid=protocol_data["id"])
+        else:
+            bot_content = "I'm analyzing your request. Could you provide more details about the equipment or issue?"
+            await s.run("""
+                MATCH (sess:Session {id:$sid})
+                CREATE (m:Message {
+                    id: $mid,
+                    sender: 'bot',
+                    content: $content,
+                    timestamp: datetime(),
+                    order: $order
+                })
+                MERGE (sess)-[:CONTAINS]->(m)
+            """, sid=msg.session_id, mid=bot_msg_id, content=bot_content, order=next_order+1)
+    
+    return {
+        "status": "success",
+        "userMessage": {
+            "id": user_msg_id,
+            "sender": "user",
+            "content": msg.content,
+            "order": next_order
+        },
+        "botMessage": {
+            "id": bot_msg_id,
+            "sender": "bot",
+            "content": bot_content,
+            "order": next_order + 1,
+            "protocol": protocol_data
+        }
+    }
+
+@app.post("/api/v1/sessions")
+async def create_session(session: SessionCreate, cu: User = Depends(get_current_user)):
+    """Create a new chat session."""
+    session_id = str(uuid.uuid4())
+    async with driver.session(database=NEO4J_DB) as s:
+        await s.run("""
+            MATCH (u:Technician {username:$user})
+            CREATE (sess:Session {
+                id: $sid,
+                title: $title,
+                created: datetime(),
+                status: 'active'
+            })
+            MERGE (u)-[:OWNS]->(sess)
+        """, user=cu.username, sid=session_id, title=session.title)
+    return {"id": session_id, "title": session.title, "status": "active"}
 
 if __name__ == "__main__":
     import uvicorn

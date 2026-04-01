@@ -372,9 +372,9 @@ const SeniorDashboard = () => {
         <p>Log your shift insights using high-accuracy "Tribal Knowledge" capture.</p>
       </div>
 
-      {/* ── Main Grid: Record + Logs ── */}
-      <div className="dashboard-grid">
-        <Card className="record-card">
+      {/* ── Row: Record + Prediction ── */}
+      <div className="dashboard-row">
+        <Card className={`record-card ${transcription ? 'expanded' : 'compact'}`}>
           <div className="record-area">
             <button
               className={`record-btn ${isRecording ? 'recording pulse-anim' : ''} ${isProcessing ? 'processing' : ''}`}
@@ -383,16 +383,16 @@ const SeniorDashboard = () => {
             >
               <div className="mic-icon">{isProcessing ? '⏳' : '🎙️'}</div>
             </button>
-            <h3>{isProcessing ? 'Transcribing with Whisper AI...' : isRecording ? 'Recording...' : 'Tap to Record Insight'}</h3>
-            <p className="record-hint" style={{ marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>{isProcessing ? 'Transcribing with Whisper AI...' : isRecording ? 'Recording...' : 'Tap to Record Insight'}</h3>
+            <p className="record-hint" style={{ marginBottom: '0.75rem', fontSize: '0.85rem' }}>
               {isProcessing ? 'Processing audio...' : 'One-tap voice capture enabled'}
             </p>
 
             {!isRecording && !isProcessing && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold' }}>— OR —</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 'bold' }}>— OR —</div>
                 <input type="file" accept="audio/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   📁 Upload Audio File
                 </Button>
               </div>
@@ -452,40 +452,9 @@ const SeniorDashboard = () => {
           )}
         </Card>
 
-        <Card title="Recent Logs" className="logs-card">
-          <ul className="logs-list">
-            {logs.map(log => (
-              <li key={log.id} className="log-item">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h4 style={{ margin: 0, color: 'var(--primary-color)' }}>{log.title || 'Untitled Insight'}</h4>
-                      <div className="log-time" style={{ marginBottom: 0 }}>• {log.time}</div>
-                    </div>
-                    <div className="log-content" style={{ marginTop: '4px' }}>{log.content}</div>
-                    <div className="log-tags" style={{ marginTop: '0.5rem', display: 'flex', gap: '5px' }}>
-                      {log.tags && log.tags.map((tag, i) => (
-                        <span key={i} style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', color: 'var(--text-secondary)' }}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                  {(log.audioUrl || log.content) && (
-                    <button onClick={() => handlePlayPause(log.id, log.audioUrl, log.content)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center' }} title="Play Voice Log">
-                      {activeAudio.id === log.id && activeAudio.status === 'playing' ? '⏸️' : activeAudio.id === log.id && activeAudio.status === 'paused' ? '▶️' : <MdHearing />}
-                    </button>
-                  )}
-                </div>
-                <div className="log-status success">{log.status}</div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-
-      {/* ─────────────────────────────────────────────────
+        {/* ─────────────────────────────────────────────
           🔮 PREDICTIVE MAINTENANCE CARD
-      ───────────────────────────────────────────────── */}
-      <div className="senior-bottom-grid">
+        ───────────────────────────────────────────── */}
         <Card className="prediction-card">
           <div className="prediction-header">
             <span className="prediction-icon">🔮</span>
@@ -539,9 +508,37 @@ const SeniorDashboard = () => {
             </div>
           )}
         </Card>
-
-       
       </div>
+
+      {/* ── Recent Logs (Top 2 only) ── */}
+      <Card title="Recent Logs" className="logs-card">
+        <ul className="logs-list">
+          {logs.slice(0, 2).map(log => (
+              <li key={log.id} className="log-item">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h4 style={{ margin: 0, color: 'var(--primary-color)' }}>{log.title || 'Untitled Insight'}</h4>
+                      <div className="log-time" style={{ marginBottom: 0 }}>• {log.time}</div>
+                    </div>
+                    <div className="log-content" style={{ marginTop: '4px' }}>{log.content}</div>
+                    <div className="log-tags" style={{ marginTop: '0.5rem', display: 'flex', gap: '5px' }}>
+                      {log.tags && log.tags.map((tag, i) => (
+                        <span key={i} style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', color: 'var(--text-secondary)' }}>{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                  {(log.audioUrl || log.content) && (
+                    <button onClick={() => handlePlayPause(log.id, log.audioUrl, log.content)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center' }} title="Play Voice Log">
+                      {activeAudio.id === log.id && activeAudio.status === 'playing' ? '⏸️' : activeAudio.id === log.id && activeAudio.status === 'paused' ? '▶️' : <MdHearing />}
+                    </button>
+                  )}
+                </div>
+                <div className="log-status success">{log.status}</div>
+              </li>
+            ))}
+          </ul>
+        </Card>
     </div>
   );
 };
