@@ -1,5 +1,9 @@
 /* src/pages/JuniorDashboard.css */
 
+.dashboard-container {
+  padding: calc(60px + 2rem) 3rem 2rem;
+}
+
 /* ──────────────────────────────── Search ──── */
 .search-section { margin-bottom: 3rem; }
 

@@ -124,7 +124,7 @@ async def init_neo4j():
     global driver
     driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     await driver.verify_connectivity()
-    print("⚡ Neo4j connected.")
+    print("[OK] Neo4j connected.")
 
 # ─── AUTH ──────────────────────────────────────────────────────────────────────
 def hash_pw(p):    return pwd_context.hash(p)
@@ -253,7 +253,7 @@ async def startup_event():
         res  = await s.run("MATCH (l:Log) RETURN count(l) as c")
         rec  = await res.single()
         if rec and rec["c"] == 0:
-            print(f"🌱 Seeding {len(HISTORICAL_LOGS)} historical logs into Neo4j...")
+            print(f"[SEED] Seeding {len(HISTORICAL_LOGS)} historical logs into Neo4j...")
             for idx, entry in enumerate(HISTORICAL_LOGS):
                 transcript = f"{entry['machine']} experiencing {entry['issue']}. Root cause: {entry['root_cause']}."
                 await s.run("""
@@ -287,7 +287,7 @@ async def startup_event():
                     "transcript":   transcript,
                     "day_offset":   idx % 30,
                 })
-            print("✅ Historical graph seeded successfully.")
+            print("[DONE] Historical graph seeded successfully.")
 
 # ─── AUTH ENDPOINTS ────────────────────────────────────────────────────────────
 @app.post("/register")
