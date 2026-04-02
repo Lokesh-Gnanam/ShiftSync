@@ -16,10 +16,14 @@ import './App.css';
 const PUBLIC_ROUTES = ['/', '/about', '/contact', '/login', '/signup'];
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return null; // Prevent flashes while resolving auth state
+  }
   
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
   
   const userRole = user.role?.toLowerCase();
@@ -37,6 +41,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 function AppContent() {
   const { user, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return null; // Prevent redirect flashes while checking auth
+  }
 
   // Redirect authenticated users away from public homepage
   if (user && location.pathname === '/') {

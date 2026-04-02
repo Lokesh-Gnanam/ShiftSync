@@ -43,7 +43,8 @@ export default defineConfig({
       '/upload-audio': 'http://127.0.0.1:8000',
       '/static': 'http://127.0.0.1:8000',
       '/profile': 'http://127.0.0.1:8000',
-      '/predict': 'http://127.0.0.1:8000'
+      '/predict': 'http://127.0.0.1:8000',
+      '/api': 'http://127.0.0.1:8000'
     }
   }
 })

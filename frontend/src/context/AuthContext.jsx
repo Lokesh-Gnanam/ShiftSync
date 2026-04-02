@@ -11,7 +11,17 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Session restoration disabled to always start from login
+    // Restore session from localStorage to persist login
+    const token = localStorage.getItem('shiftsync_token');
+    const storedUser = localStorage.getItem('shiftsync_user');
+    
+    if (token && storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error('Failed to parse stored user', e);
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -50,6 +60,11 @@ export const AuthProvider = ({ children }) => {
           // Normalize role for routing
           userData.role = userData.role?.toLowerCase() || 'junior';
           console.log('User profile loaded:', userData.role);
+          
+          // Persist user and role
+          localStorage.setItem('shiftsync_user_role', userData.role);
+          localStorage.setItem('shiftsync_user', JSON.stringify(userData));
+          
           setUser(userData);
           return true;
         } else {
@@ -97,6 +112,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('shiftsync_token');
+    localStorage.removeItem('shiftsync_user_role');
+    localStorage.removeItem('shiftsync_user');
     setUser(null);
   };
 

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   FiMic, FiMicOff, FiSend, FiPaperclip, FiSettings,
   FiActivity, FiAlertTriangle, FiInfo, FiLogOut,
@@ -102,6 +104,9 @@ const SeverityIcon = ({ level }) => {
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 const SeniorDashboard = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
   // ── State ──
   const [isRecording,       setIsRecording]       = useState(false);
   const [isProcessing,      setIsProcessing]       = useState(false);
@@ -110,14 +115,13 @@ const SeniorDashboard = () => {
   const [currentAudioUrl,   setCurrentAudioUrl]    = useState(null);
   const [logs,              setLogs]               = useState([]);
   const [recordTime,        setRecordTime]         = useState(0);
-  const [inputText,         setInputText]          = useState('');
   const [activeAudio,       setActiveAudio]        = useState({ id: null, status: 'stopped' });
   const [predictMachine,    setPredictMachine]     = useState('');
   const [predictResult,     setPredictResult]      = useState(null);
   const [isPredicting,      setIsPredicting]       = useState(false);
   const [profileData,       setProfileData]        = useState(null);
-  const [sidebarExpanded,   setSidebarExpanded]    = useState(true);
   const [activeNav,         setActiveNav]          = useState('session');
+  const [activeLogTab,      setActiveLogTab]       = useState('system');
 
   // ── Refs ──
   const audioRef         = useRef(null);
@@ -209,6 +213,11 @@ const SeniorDashboard = () => {
       const res = await fetch(`/predict/${encodeURIComponent(machine)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        logout();
+        navigate('/', { replace: true });
+        return;
+      }
       if (!res.ok) throw new Error('Prediction failed');
       setPredictResult(await res.json());
     } catch (err) {
@@ -419,34 +428,6 @@ const SeniorDashboard = () => {
     return `${m}:${s}`;
   };
 
-  // ── Handle input send ──
-  const handleSend = async () => {
-    const q = inputText.trim();
-    if (!q) return;
-
-    // If it looks like a machine query, run prediction
-    const lower = q.toLowerCase();
-    if (lower.includes('pump') || lower.includes('motor') || lower.includes('cnc') || lower.includes('hydraulic') || lower.includes('cooling') || lower.includes('conveyor')) {
-      setPredictMachine(q);
-      setInputText('');
-      const token = localStorage.getItem('shiftsync_token');
-      setIsPredicting(true);
-      setPredictResult(null);
-      try {
-        const res = await fetch(`/predict/${encodeURIComponent(q)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) setPredictResult(await res.json());
-      } catch (err) {
-        setPredictResult({ prediction: `Unable to retrieve: ${err.message}` });
-      } finally {
-        setIsPredicting(false);
-      }
-    } else {
-      setInputText('');
-    }
-  };
-
   // ── High-risk components (derived or from prediction) ──
   const highRiskComponents = [
     { name: 'Pump P3 — Suction Valve',     risk: 'HIGH',   pct: 87 },
@@ -457,75 +438,6 @@ const SeniorDashboard = () => {
 
   return (
     <div className="sd-root">
-      {/* ═══════════════ SIDEBAR ═══════════════ */}
-      <aside className={`sd-sidebar ${sidebarExpanded ? 'expanded' : 'collapsed'}`}>
-        {/* Logo */}
-        <div className="sd-logo-block">
-          <div className="sd-logo-badge">SS</div>
-          <div className="sd-logo-text">
-            <span className="sd-logo-title">ShiftSync AI</span>
-            <span className="sd-logo-sub">INDUSTRIAL NODE V5.0</span>
-          </div>
-        </div>
-
-        {/* New Session Button */}
-        <button className="sd-new-session-btn">
-          <FiPlus size={16} />
-          <span>NEW SESSION</span>
-        </button>
-
-        {/* Navigation */}
-        <nav className="sd-nav">
-          <div className="sd-nav-label">CURRENT SESSION</div>
-          <button
-            className={`sd-nav-item ${activeNav === 'session' ? 'active' : ''}`}
-            onClick={() => setActiveNav('session')}
-          >
-            <FiRadio size={14} />
-            <span>Pump System Diagnostics</span>
-            <FiChevronRight size={12} className="sd-nav-chevron" />
-          </button>
-
-          <div className="sd-nav-label" style={{ marginTop: '1.25rem' }}>HISTORY</div>
-          {[
-            { key: 'hvac',  icon: <FiActivity size={14} />,   label: 'HVAC VFD Fault Review' },
-            { key: 'valve', icon: <FiShield size={14} />,     label: 'Safety Valve Checks' },
-            { key: 'proto', icon: <FiFileText size={14} />,   label: 'Maintenance Protocols' },
-            { key: 'anal',  icon: <FiBarChart2 size={14} />,  label: 'Analytics Overview' },
-          ].map(n => (
-            <button
-              key={n.key}
-              className={`sd-nav-item ${activeNav === n.key ? 'active' : ''}`}
-              onClick={() => setActiveNav(n.key)}
-            >
-              {n.icon}
-              <span>{n.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* Profile Block */}
-        <div className="sd-profile-block">
-          <div className="sd-profile-top">
-            <div className="sd-avatar">ST</div>
-            <div>
-              <div className="sd-profile-name">{profileData?.name || 'Senior Tech'}</div>
-              <div className="sd-profile-id">
-                <span className="sd-online-dot" />
-                Senior ID: 9001 — ACTIVE
-              </div>
-            </div>
-          </div>
-          <div className="sd-profile-actions">
-            <button className="sd-profile-btn"><FiHelpCircle size={14}/> System Support</button>
-            <button className="sd-profile-btn danger"><FiLogOut size={14}/> Disconnect</button>
-          </div>
-        </div>
-      </aside>
-
       {/* ═══════════════ MAIN CONTENT ═══════════════ */}
       <main className="sd-main">
 
@@ -540,29 +452,99 @@ const SeniorDashboard = () => {
           </div>
           <div className="sd-header-right">
             <span className="sd-safety-badge"><FiShield size={12}/> SAFETY TIER 1</span>
-            <button className="sd-icon-btn"><FiSettings size={18}/></button>
+            <button className="sd-profile-btn danger" onClick={() => {
+              logout();
+              navigate('/', { replace: true });
+            }}><FiLogOut size={14}/> Disconnect</button>
           </div>
         </header>
 
         {/* ── Greeting ── */}
-        <section className="sd-greeting">
+        <section className="sd-greeting centered">
           <div className="sd-greeting-text">
             <h2>Hello Senior, <span className="sd-greeting-accent">how are you?</span></h2>
             <p className="sd-greeting-sub">Any new things today?</p>
           </div>
-          <div className="sd-greeting-actions">
-            <button className="sd-quick-btn" onClick={() => setActiveNav('logs')}>
-              <FiFileText size={13} /> SYSTEM LOGS
-            </button>
-            <button className="sd-quick-btn" onClick={() => setActiveNav('anal')}>
-              <HiOutlineChartBar size={13} /> PERFORMANCE
-            </button>
-          </div>
+        </section>
+
+        {/* ── Center: Audio Recorder & Insights ── */}
+        <section className="sd-recorder-section">
+          <div className="sd-recorder-card">
+              <div className="sd-recorder-left">
+                <button
+                  className={`sd-record-btn ${isRecording ? 'recording' : ''} ${isProcessing ? 'processing' : ''}`}
+                  onClick={toggleRecording}
+                  disabled={isProcessing}
+                >
+                  {isProcessing
+                    ? <FiRefreshCw size={28} className="spin" />
+                    : isRecording
+                    ? <FiSquare size={28} />
+                    : <FiMic size={28} />}
+                  {isRecording && <span className="sd-pulse-ring" />}
+                </button>
+                <div className="sd-recorder-labels">
+                  <span className="sd-recorder-status">
+                    {isProcessing ? 'PROCESSING...' : isRecording ? 'RECORDING' : 'TAP TO RECORD'}
+                  </span>
+                  <span className="sd-recorder-timer">{formatTime(recordTime)}</span>
+                </div>
+              </div>
+              <div className="sd-waveform-wrap">
+                <WaveformCanvas isRecording={isRecording} />
+              </div>
+              <div className="sd-recorder-right">
+                <input type="file" accept="audio/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+                <button className="sd-recorder-upload-btn" onClick={() => fileInputRef.current?.click()} title="Upload audio file">
+                  <FiPaperclip size={18}/>
+                </button>
+                {transcription && (
+                  <button className="sd-recorder-save-btn" onClick={handleSave} disabled={isProcessing}>
+                    {isProcessing ? <FiRefreshCw size={16} className="spin" /> : <FiZap size={16}/>}
+                    Save to Graph
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Insight Result */}
+            {transcription && (
+              <div className="sd-insight-card animate-in">
+                <div className="sd-insight-header">
+                  <span className="sd-insight-title">Extracted Insight</span>
+                  <span className="sd-ai-badge">AI VERIFIED</span>
+                </div>
+                <p className="sd-insight-quote">"{transcription}"</p>
+                <div className="sd-insight-tags">
+                  <span className="sd-insight-tag machine"><FiZap size={11}/>{extractedInsight?.machine || 'Analyzing...'}</span>
+                  <span className="sd-insight-tag issue"><FiAlertTriangle size={11}/>{extractedInsight?.issue || 'Extracting...'}</span>
+                </div>
+                {extractedInsight?.resolution && (
+                  <div className="sd-insight-resolution">
+                    <div className="sd-insight-section-label">ACTIONABLE RESOLUTION</div>
+                    <p>{extractedInsight.resolution}</p>
+                  </div>
+                )}
+                {extractedInsight?.root_cause && (
+                  <div className="sd-insight-root-cause">
+                    <div className="sd-insight-section-label">ROOT CAUSE</div>
+                    <p>{extractedInsight.root_cause}</p>
+                  </div>
+                )}
+                {extractedInsight?.confidence && (
+                  <div className="sd-confidence-row">
+                    <div className="sd-conf-bar-track">
+                      <div className="sd-conf-bar-fill" style={{ width: `${extractedInsight.confidence * 100}%` }} />
+                    </div>
+                    <span className="sd-conf-label">{(extractedInsight.confidence * 100).toFixed(0)}% AI Confidence</span>
+                  </div>
+                )}
+              </div>
+            )}
         </section>
 
         {/* ── Dashboard Grid ── */}
         <section className="sd-grid">
-
           {/* ── Left: Predictive Maintenance ── */}
           <div className="sd-card sd-card-predict">
             <div className="sd-card-header">
@@ -591,21 +573,7 @@ const SeniorDashboard = () => {
               </div>
             </div>
 
-            {/* Query input */}
-            <div className="sd-predict-input-row">
-              <input
-                className="sd-predict-input"
-                placeholder="e.g. pump, CNC, hydraulic..."
-                value={predictMachine}
-                onChange={e => setPredictMachine(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handlePredict()}
-                disabled={isPredicting}
-              />
-              <button className="sd-predict-btn" onClick={handlePredict} disabled={isPredicting || !predictMachine.trim()}>
-                {isPredicting ? <FiRefreshCw size={14} className="spin" /> : <FiZap size={14} />}
-                {isPredicting ? 'Analyzing...' : 'Predict'}
-              </button>
-            </div>
+            {/* Query input removed as requested */}
 
             {/* Prediction Result */}
             {predictResult && (
@@ -640,11 +608,28 @@ const SeniorDashboard = () => {
           {/* ── Right: Recent Logs ── */}
           <div className="sd-card sd-card-logs">
             <div className="sd-card-header">
-              <span className="sd-card-title"><FiActivity size={15}/> Recent System Logs</span>
-              <span className="sd-log-count">{logs.length} entries</span>
+              <div className="sd-log-tabs">
+                <button 
+                  className={`sd-log-tab ${activeLogTab === 'system' ? 'active' : ''}`}
+                  onClick={() => setActiveLogTab('system')}
+                >
+                  <FiActivity size={14}/> System Logs
+                </button>
+                <button 
+                  className={`sd-log-tab ${activeLogTab === 'performance' ? 'active' : ''}`}
+                  onClick={() => setActiveLogTab('performance')}
+                >
+                  <HiOutlineChartBar size={14}/> Performance Logs
+                </button>
+              </div>
+              <span className="sd-log-count">
+                {activeLogTab === 'system' ? logs.length : 3} entries
+              </span>
             </div>
             <div className="sd-logs-scroll">
-              {logs.slice(0, 6).map(log => (
+              {activeLogTab === 'system' ? (
+                <>
+                  {logs.slice(0, 6).map(log => (
                 <div key={log.id} className="sd-log-row">
                   <SeverityIcon level={log.severity} />
                   <div className="sd-log-body">
@@ -670,136 +655,41 @@ const SeniorDashboard = () => {
                     </button>
                   </div>
                 </div>
-              ))}
-              {logs.length === 0 && (
-                <div className="sd-logs-empty">
-                  <FiFileText size={28}/><p>No logs yet. Record your first insight below.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Audio Recorder ── */}
-        <section className="sd-recorder-section">
-          <div className="sd-recorder-card">
-            <div className="sd-recorder-left">
-              {/* Record Button */}
-              <button
-                className={`sd-record-btn ${isRecording ? 'recording' : ''} ${isProcessing ? 'processing' : ''}`}
-                onClick={toggleRecording}
-                disabled={isProcessing}
-                title={isRecording ? 'Stop Recording' : 'Start Recording'}
-              >
-                {isProcessing
-                  ? <FiRefreshCw size={28} className="spin" />
-                  : isRecording
-                  ? <FiSquare size={28} />
-                  : <FiMic size={28} />}
-                {isRecording && <span className="sd-pulse-ring" />}
-              </button>
-
-              {/* Labels */}
-              <div className="sd-recorder-labels">
-                <span className="sd-recorder-status">
-                  {isProcessing ? 'PROCESSING...' : isRecording ? 'RECORDING' : 'TAP TO RECORD'}
-                </span>
-                <span className="sd-recorder-timer">{formatTime(recordTime)}</span>
-              </div>
-            </div>
-
-            {/* Waveform */}
-            <div className="sd-waveform-wrap">
-              <WaveformCanvas isRecording={isRecording} />
-            </div>
-
-            {/* Save / Upload */}
-            <div className="sd-recorder-right">
-              <input type="file" accept="audio/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-              <button className="sd-recorder-upload-btn" onClick={() => fileInputRef.current?.click()} title="Upload audio file">
-                <FiPaperclip size={18}/>
-              </button>
-              {transcription && (
-                <button className="sd-recorder-save-btn" onClick={handleSave} disabled={isProcessing}>
-                  {isProcessing ? <FiRefreshCw size={16} className="spin" /> : <FiZap size={16}/>}
-                  Save to Graph
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Insight Result */}
-          {transcription && (
-            <div className="sd-insight-card animate-in">
-              <div className="sd-insight-header">
-                <span className="sd-insight-title">Extracted Insight</span>
-                <span className="sd-ai-badge">AI VERIFIED</span>
-              </div>
-              <p className="sd-insight-quote">"{transcription}"</p>
-
-              <div className="sd-insight-tags">
-                <span className="sd-insight-tag machine"><FiZap size={11}/>{extractedInsight?.machine || 'Analyzing...'}</span>
-                <span className="sd-insight-tag issue"><FiAlertTriangle size={11}/>{extractedInsight?.issue || 'Extracting...'}</span>
-              </div>
-
-              {extractedInsight?.resolution && (
-                <div className="sd-insight-resolution">
-                  <div className="sd-insight-section-label">ACTIONABLE RESOLUTION</div>
-                  <p>{extractedInsight.resolution}</p>
-                </div>
-              )}
-              {extractedInsight?.root_cause && (
-                <div className="sd-insight-root-cause">
-                  <div className="sd-insight-section-label">ROOT CAUSE</div>
-                  <p>{extractedInsight.root_cause}</p>
-                </div>
-              )}
-              {extractedInsight?.confidence && (
-                <div className="sd-confidence-row">
-                  <div className="sd-conf-bar-track">
-                    <div className="sd-conf-bar-fill" style={{ width: `${extractedInsight.confidence * 100}%` }} />
+                  ))}
+                  {logs.length === 0 && (
+                    <div className="sd-logs-empty">
+                      <FiFileText size={28}/><p>No logs yet. Record your first insight below.</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="sd-log-row">
+                    <FiActivity size={16} className="sev-icon info"/>
+                    <div className="sd-log-body">
+                      <div className="sd-log-content">System overall CPU utilization has remained under 45% for the last 24h.</div>
+                    </div>
+                    <div className="sd-log-meta"><span className="sd-log-time">Just now</span></div>
                   </div>
-                  <span className="sd-conf-label">{(extractedInsight.confidence * 100).toFixed(0)}% AI Confidence</span>
-                </div>
-              )}
-
-              {(currentAudioUrl || transcription) && (
-                <button className="sd-play-btn" onClick={() => handlePlayPause('current', currentAudioUrl, transcription)}>
-                  {activeAudio.id === 'current' && activeAudio.status === 'playing'
-                    ? <><FiPause size={14}/> Pause Audio</>
-                    : activeAudio.id === 'current' && activeAudio.status === 'paused'
-                    ? <><FiPlay size={14}/> Resume Audio</>
-                    : <><FiPlay size={14}/> Play Audio</>}
-                </button>
+                  <div className="sd-log-row">
+                    <FiAlertTriangle size={16} className="sev-icon warning"/>
+                    <div className="sd-log-body">
+                      <div className="sd-log-content">Network latency spikes detected on IPC gateway during shift change.</div>
+                    </div>
+                    <div className="sd-log-meta"><span className="sd-log-time">1h ago</span></div>
+                  </div>
+                  <div className="sd-log-row">
+                    <FiInfo size={16} className="sev-icon info"/>
+                    <div className="sd-log-body">
+                      <div className="sd-log-content">Memory overhead cleared after scheduled automated maintenance sweep.</div>
+                    </div>
+                    <div className="sd-log-meta"><span className="sd-log-time">4h ago</span></div>
+                  </div>
+                </>
               )}
             </div>
-          )}
-        </section>
-
-        {/* ── Input Bar ── */}
-        <div className="sd-input-bar-wrap">
-          <div className="sd-input-bar">
-            <button className="sd-input-icon-btn" onClick={() => fileInputRef.current?.click()} title="Upload file">
-              <FiPaperclip size={18}/>
-            </button>
-            <input
-              className="sd-input-field"
-              placeholder="Enter technical command or query..."
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSend()}
-            />
-            <button className="sd-input-icon-btn" onClick={toggleRecording} title="Voice input">
-              {isRecording ? <FiMicOff size={18}/> : <FiMic size={18}/>}
-            </button>
-            <button className="sd-send-btn" onClick={handleSend} title="Send">
-              <MdOutlineRocketLaunch size={18}/>
-            </button>
           </div>
-          <p className="sd-footer-text">
-            NODE-TO-NODE SECURE INDUSTRIAL TRANSMISSION • SHIFTSYNC AI
-          </p>
-        </div>
+        </section>
 
       </main>
     </div>

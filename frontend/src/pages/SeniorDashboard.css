@@ -13,12 +13,12 @@
 
 /* ── Root reset for this page ── */
 .sd-root {
-  display: grid;
-  grid-template-columns: 250px 1fr;
+  display: flex;
+  flex-direction: column;
   /* Account for the 60px fixed Navbar from App shell */
   height: calc(100dvh - 60px);
   margin-top: 60px;
-  width: 100%;
+  width: 100vw;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
   background: #F8F6F4;
@@ -26,222 +26,7 @@
   position: relative;
 }
 
-/* ════════════════════════════════
-   SIDEBAR
-════════════════════════════════ */
-.sd-sidebar {
-  display: flex;
-  flex-direction: column;
-  background: #1A1A1A;
-  color: #f0ede9;
-  padding: 1.5rem 1rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-right: 1px solid rgba(255,255,255,0.05);
-  gap: 0;
-  transition: width 0.3s ease;
-}
 
-.sd-sidebar::-webkit-scrollbar { width: 4px; }
-.sd-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
-
-/* Logo */
-.sd-logo-block {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.75rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.sd-logo-badge {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: #A03C31;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  font-weight: 800;
-  color: #fff;
-  flex-shrink: 0;
-  letter-spacing: -0.5px;
-}
-
-.sd-logo-title {
-  display: block;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #f0ede9;
-  letter-spacing: -0.2px;
-  line-height: 1.2;
-}
-
-.sd-logo-sub {
-  display: block;
-  font-size: 0.6rem;
-  font-weight: 600;
-  color: #A03C31;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-top: 2px;
-}
-
-/* New Session Button */
-.sd-new-session-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.65rem;
-  background: #2a2a2a;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-  color: #f0ede9;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 1.5rem;
-}
-
-.sd-new-session-btn:hover {
-  background: #A03C31;
-  border-color: transparent;
-  box-shadow: 0 4px 12px rgba(160, 60, 49, 0.35);
-}
-
-/* Navigation */
-.sd-nav { display: flex; flex-direction: column; gap: 0.25rem; }
-
-.sd-nav-label {
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: rgba(240,237,233,0.35);
-  padding: 0.25rem 0.5rem;
-  margin-bottom: 0.2rem;
-}
-
-.sd-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  color: rgba(240,237,233,0.55);
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.18s ease;
-  width: 100%;
-}
-
-.sd-nav-item span { flex: 1; }
-
-.sd-nav-item:hover {
-  background: rgba(255,255,255,0.07);
-  color: #f0ede9;
-}
-
-.sd-nav-item.active {
-  background: rgba(160, 60, 49, 0.18);
-  color: #e87060;
-  font-weight: 600;
-}
-
-.sd-nav-chevron { opacity: 0.4; margin-left: auto; }
-
-/* Profile Block */
-.sd-profile-block {
-  border-top: 1px solid rgba(255,255,255,0.07);
-  padding-top: 1rem;
-  margin-top: 0.5rem;
-}
-
-.sd-profile-top {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.75rem;
-}
-
-.sd-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #A03C31, #c05040);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: white;
-  flex-shrink: 0;
-}
-
-.sd-profile-name {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #f0ede9;
-  line-height: 1.2;
-}
-
-.sd-profile-id {
-  font-size: 0.62rem;
-  color: rgba(240,237,233,0.45);
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-top: 2px;
-}
-
-.sd-online-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #4ade80;
-  display: inline-block;
-  box-shadow: 0 0 6px rgba(74,222,128,0.6);
-}
-
-.sd-profile-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.sd-profile-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.6rem;
-  border: none;
-  background: transparent;
-  border-radius: 7px;
-  color: rgba(240,237,233,0.5);
-  font-size: 0.74rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  width: 100%;
-  text-align: left;
-}
-
-.sd-profile-btn:hover { background: rgba(255,255,255,0.07); color: #f0ede9; }
-.sd-profile-btn.danger:hover { background: rgba(160,60,49,0.2); color: #e87060; }
-
-/* ════════════════════════════════
-   MAIN CONTENT
-════════════════════════════════ */
 .sd-main {
   display: flex;
   flex-direction: column;
@@ -354,19 +139,29 @@
   flex-shrink: 0;
 }
 
+.sd-greeting.centered {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin-top: 1.5rem;
+  padding: 2rem;
+  width: 100%;
+}
+
 .sd-greeting-text h2 {
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 800;
   color: #1A1A1A;
-  margin: 0 0 0.2rem;
+  margin: 0 0 0.4rem;
   line-height: 1.2;
 }
 
 .sd-greeting-accent { color: #A03C31; }
 
 .sd-greeting-sub {
-  font-size: 0.82rem;
-  color: #9CA3AF;
+  font-size: 1.1rem;
+  color: #6B7280;
   margin: 0;
 }
 
@@ -402,12 +197,13 @@
 ════════════════════════════════ */
 .sd-grid {
   display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 1rem;
-  padding: 1rem 2rem;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  padding: 1rem 2rem 4rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: start;
 }
 
 .sd-card {
@@ -545,49 +341,42 @@
   margin-top: 3px;
 }
 
-/* Query Input */
-.sd-predict-input-row {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid #f0ede9;
-  flex-shrink: 0;
-}
-
-.sd-predict-input {
-  flex: 1;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid #E2DDD8;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-family: 'Inter', sans-serif;
-  background: #F8F6F4;
-  color: #1A1A1A;
-  outline: none;
-  transition: border-color 0.18s ease;
-}
-
-.sd-predict-input:focus { border-color: #A03C31; box-shadow: 0 0 0 2px rgba(160,60,49,0.12); }
-.sd-predict-input::placeholder { color: #9CA3AF; }
-
-.sd-predict-btn {
+/* ── Log Tabs ── */
+.sd-log-tabs {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 1rem;
-  background: #1A1A1A;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  white-space: nowrap;
+  gap: 0.5rem;
+  background: #F8F6F4;
+  padding: 0.35rem;
+  border-radius: 9px;
+  border: 1px solid #E2DDD8;
 }
 
-.sd-predict-btn:hover:not(:disabled) { background: #A03C31; }
-.sd-predict-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sd-log-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sd-log-tab.active {
+  background: #fff;
+  color: #1A1A1A;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.sd-log-tab:hover:not(.active) {
+  color: #1A1A1A;
+  background: rgba(0,0,0,0.02);
+}
 
 /* Prediction Result */
 .sd-predict-result {
@@ -802,11 +591,14 @@
    AUDIO RECORDER
 ════════════════════════════════ */
 .sd-recorder-section {
-  padding: 0.75rem 2rem;
-  flex-shrink: 0;
+  padding: 0.75rem 2rem 2rem;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .sd-recorder-card {
@@ -1097,87 +889,6 @@
 .sd-play-btn:hover { background: #1A1A1A; border-color: #1A1A1A; color: white; }
 
 /* ════════════════════════════════
-   INPUT BAR
-════════════════════════════════ */
-.sd-input-bar-wrap {
-  padding: 0.5rem 2rem 1rem;
-  flex-shrink: 0;
-}
-
-.sd-input-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #fff;
-  border: 1px solid #E2DDD8;
-  border-radius: 999px;
-  padding: 0.5rem 0.5rem 0.5rem 1rem;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-  transition: box-shadow 0.2s ease;
-}
-
-.sd-input-bar:focus-within {
-  box-shadow: 0 4px 24px rgba(0,0,0,0.09);
-  border-color: #c8c2bc;
-}
-
-.sd-input-field {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-family: 'Inter', sans-serif;
-  font-size: 0.85rem;
-  color: #1A1A1A;
-  background: transparent;
-}
-
-.sd-input-field::placeholder { color: #9CA3AF; }
-
-.sd-input-icon-btn {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: #9CA3AF;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  flex-shrink: 0;
-}
-
-.sd-input-icon-btn:hover { background: #F0EDE9; color: #1A1A1A; }
-
-.sd-send-btn {
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #1A1A1A;
-  border: none;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(26,26,26,0.25);
-}
-
-.sd-send-btn:hover { background: #A03C31; transform: scale(1.05); }
-
-.sd-footer-text {
-  text-align: center;
-  font-size: 0.58rem;
-  color: #C4BDB7;
-  letter-spacing: 0.8px;
-  font-weight: 500;
-  margin: 0.5rem 0 0;
-}
-
-/* ════════════════════════════════
    ANIMATIONS
 ════════════════════════════════ */
 @keyframes spin {
@@ -1200,15 +911,18 @@
    RESPONSIVE
 ════════════════════════════════ */
 @media (max-width: 1100px) {
+  .sd-card-logs { max-height: 500px; }
+}
+
+@media (max-width: 900px) {
   .sd-grid { grid-template-columns: 1fr; }
-  .sd-card-logs { max-height: 220px; }
 }
 
 @media (max-width: 800px) {
-  .sd-root { grid-template-columns: 1fr; }
-  .sd-sidebar { display: none; }
-  .sd-header, .sd-greeting, .sd-grid, .sd-recorder-section, .sd-input-bar-wrap {
+  .sd-header, .sd-greeting, .sd-grid, .sd-recorder-section {
     padding-left: 1rem;
     padding-right: 1rem;
   }
+  .sd-greeting-text h2 { font-size: 2rem; }
+  .sd-recorder-card { flex-direction: column; }
 }

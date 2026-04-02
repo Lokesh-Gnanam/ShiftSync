@@ -85,6 +85,20 @@ const Login = () => {
     }
   }, [user, navigate]);
 
+  // Trap back button immediately to force users out of a dashboard backward loop
+  useEffect(() => {
+    if (!user) {
+      window.history.pushState(null, "", window.location.href);
+      window.onpopstate = () => {
+        navigate("/", { replace: true });
+      };
+    }
+    
+    return () => {
+      window.onpopstate = null;
+    };
+  }, [navigate, user]);
+
   if (loading) return (
     <div className="loading-screen">
       <div className="loading-content">

@@ -644,39 +644,128 @@ async def get_chat_thread(session_id: str, cu: User = Depends(get_current_user))
     async with driver.session(database=NEO4J_DB) as s:
         res = await s.run("""
             MATCH (sess:Session {id:$sid})-[:CONTAINS]->(m:Message)
-            OPTIONAL MATCH (m)-[:REFERENCES]->(e:Equipment)-[:HAS_PROTOCOL]->(p:Protocol)
+            OPTIONAL MATCH (m)-[:REFERENCES]->(l:Log)-[:RESOLVED_BY]->(r:Resolution)
+            OPTIONAL MATCH (l)-[:INVOLVES_MACHINE]->(mach:Machine)
             RETURN m.id AS id,
                    m.sender AS sender,
                    m.content AS content,
                    toString(m.timestamp) AS timestamp,
                    m.order AS order,
                    m.protocolId AS protocolId,
-                   p.title AS protocolTitle,
-                   p.steps AS protocolSteps,
-                   p.audioUrl AS audioUrl,
-                   p.duration AS duration,
-                   p.safetyNote AS safetyNote
+                   mach.name AS machineName,
+                   r.steps AS rawSteps,
+                   l.audio_url AS audioUrl,
+                   l.transcript AS transcript
             ORDER BY m.order ASC
         """, sid=session_id)
-        return await res.data()
+        rows = await res.data()
+        
+    import re
+    result_messages = []
+    for row in rows:
+        msg = {
+            "id": row["id"],
+            "sender": row["sender"],
+            "content": row["content"],
+            "timestamp": row["timestamp"],
+            "order": row["order"],
+            "protocolId": row["protocolId"],
+            "protocolTitle": None,
+            "protocolSteps": None,
+            "audioUrl": None,
+            "duration": None,
+            "safetyNote": None,
+            "protocolTranscript": None
+        }
+        
+        if row.get("rawSteps"):
+            machine_name = row.get("machineName") or "Equipment"
+            msg["protocolTitle"] = f"Resolution for {machine_name}"
+            msg["audioUrl"] = row.get("audioUrl")
+            msg["duration"] = "N/A"
+            msg["safetyNote"] = get_safety_message(machine_name)
+            msg["protocolTranscript"] = row.get("transcript")
+            
+            # Form clean steps
+            raw_steps = re.split(r'\. |; |\n', row["rawSteps"])
+            steps = [st.strip() for st in raw_steps if len(st.strip()) > 5]
+            if not steps:
+                steps = [row["rawSteps"]]
+            msg["protocolSteps"] = steps
+            
+        result_messages.append(msg)
+        
+    return result_messages
 
 @app.post("/api/v1/chat/message")
 async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_user)):
-    """Send a new message and get AI response with structured protocol data."""
+    """Send a new message and get AI response with structured protocol data from Logs."""
     user_msg_id = str(uuid.uuid4())
     bot_msg_id = str(uuid.uuid4())
     
-    # Extract equipment mention from user message
-    content_lower = msg.content.lower()
-    equipment_name = None
-    protocol_data = None
+    q = msg.content.strip()
     
-    if "pump 3" in content_lower or "pump3" in content_lower:
-        equipment_name = "Pump 3"
-    elif "hvac" in content_lower:
-        equipment_name = "HVAC Unit 2"
-    elif "valve" in content_lower:
-        equipment_name = "Safety Valve SV-101"
+    # ─── 0. AI Explanation Intercept ───
+    if q.startswith("__EXPLAIN__"):
+        log_id = q.replace("__EXPLAIN__", "")
+        async with driver.session(database=NEO4J_DB) as s:
+            # Count
+            count_res = await s.run("MATCH (sess:Session {id:$sid})-[:CONTAINS]->(m:Message) RETURN count(m) AS cnt", sid=msg.session_id)
+            cnt = (await count_res.single())["cnt"]
+            next_order = cnt + 1
+            
+            # Save User Message as a natural question
+            user_content = "Can you explain this solution in more detail?"
+            await s.run("""
+                MATCH (sess:Session {id:$sid})
+                CREATE (m:Message {id: $mid, sender: 'user', content: $content, timestamp: datetime(), order: $order})
+                MERGE (sess)-[:CONTAINS]->(m)
+            """, sid=msg.session_id, mid=user_msg_id, content=user_content, order=next_order)
+            
+            # Fetch log text
+            res = await s.run("MATCH (l:Log {id:$id}) RETURN l.transcript AS transcript", id=log_id)
+            rec = await res.single()
+            
+            bot_content = "I couldn't retrieve the transcript for this log."
+            if rec and rec["transcript"]:
+                transcript = rec["transcript"]
+                import httpx
+                try:
+                    async with httpx.AsyncClient() as client:
+                        prompt = f"""You are a Senior Industrial AI. A Junior technician asked you to explain a solution. The Senior Technician dictated the following note for the log:
+
+\"{transcript}\"
+
+Explain this step-by-step for a Junior technician, focusing on safety and clarity. Format it neatly without markdown headers."""
+                        groq_res = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                            json={"model": "llama3-70b-8192", "messages": [{"role": "user", "content": prompt}]},
+                            timeout=15.0
+                        )
+                        if groq_res.status_code == 200:
+                            bot_content = groq_res.json()["choices"][0]["message"]["content"]
+                except Exception as e:
+                    bot_content = f"Error consulting AI: {e}"
+                    
+            await s.run("""
+                MATCH (sess:Session {id:$sid})
+                CREATE (m:Message {id: $mid, sender: 'bot', content: $content, timestamp: datetime(), order: $order})
+                MERGE (sess)-[:CONTAINS]->(m)
+            """, sid=msg.session_id, mid=bot_msg_id, content=bot_content, order=next_order+1)
+            
+        return {
+            "status": "success",
+            "userMessage": {"id": user_msg_id, "sender": "user", "content": user_content, "order": next_order},
+            "botMessage": {"id": bot_msg_id, "sender": "bot", "content": bot_content, "order": next_order + 1, "protocol": None}
+        }
+    
+    # ─── 1. Groq-assisted query understanding ───
+    extracted = await groq_extract_query(q)
+    m_q = (extracted.get("machine") or "").lower()
+    i_q = (extracted.get("issue")   or "").lower()
+    
+    protocol_data = None
     
     async with driver.session(database=NEO4J_DB) as s:
         # Get current message count
@@ -700,28 +789,52 @@ async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_use
             MERGE (sess)-[:CONTAINS]->(m)
         """, sid=msg.session_id, mid=user_msg_id, content=msg.content, order=next_order)
         
-        # If equipment mentioned, fetch protocol
-        if equipment_name:
-            proto_res = await s.run("""
-                MATCH (e:Equipment {name:$eq})-[:HAS_PROTOCOL]->(p:Protocol)
-                RETURN p.id AS id,
-                       p.title AS title,
-                       p.steps AS steps,
-                       p.audioUrl AS audioUrl,
-                       p.duration AS duration,
-                       p.safetyNote AS safetyNote
-                LIMIT 1
-            """, eq=equipment_name)
-            proto_rec = await proto_res.single()
-            if proto_rec:
-                protocol_data = dict(proto_rec)
+        # 2. Search for related Log
+        res = await s.run("""
+            MATCH (l:Log)-[:RESOLVED_BY]->(r:Resolution)
+            OPTIONAL MATCH (l)-[:INVOLVES_MACHINE]->(mach:Machine)
+            OPTIONAL MATCH (l)-[:HAS_ISSUE]       ->(i:Issue)
+            WHERE toLower(l.transcript) CONTAINS toLower($q)
+               OR ($m_q <> '' AND toLower(coalesce(mach.name,'')) CONTAINS toLower($m_q))
+               OR ($i_q <> '' AND toLower(coalesce(i.name,'')) CONTAINS toLower($i_q))
+            RETURN l.id AS log_id,
+                   coalesce(mach.name, 'Unknown Machine') AS machine,
+                   coalesce(i.name, 'Unknown Issue') AS issue,
+                   r.steps AS solution,
+                   l.audio_url AS audio_url,
+                   l.transcript AS transcript
+            ORDER BY l.timestamp DESC LIMIT 1
+        """, q=q.lower(), m_q=m_q, i_q=i_q)
+        match_rec = await res.single()
         
-        # Generate bot response
-        if protocol_data:
-            bot_content = f"I found the protocol for {equipment_name}. Here are the steps:"
-            # Save bot message with protocol reference
+        # 3. Generate bot response
+        bot_content = "I'm analyzing your request. Could you provide more details about the equipment or issue?"
+        if match_rec:
+            machine_name = match_rec["machine"]
+            issue_name = match_rec["issue"]
+            solution_text = match_rec["solution"] or ""
+            
+            # Form clean steps
+            import re
+            raw_steps = re.split(r'\. |; |\n', solution_text)
+            steps = [st.strip() for st in raw_steps if len(st.strip()) > 5]
+            if not steps:
+                steps = [solution_text] if solution_text else ["No specific steps logged."]
+                
+            bot_content = f"I found historically relevant logs for {machine_name}: {issue_name}."
+            protocol_data = {
+                "id": match_rec["log_id"],
+                "title": f"Resolution for {machine_name}",
+                "steps": steps,
+                "audioUrl": match_rec["audio_url"],
+                "duration": "N/A",
+                "safetyNote": get_safety_message(machine_name),
+                "transcript": match_rec["transcript"]
+            }
+            
+            # Save bot message linking back to the Log
             await s.run("""
-                MATCH (sess:Session {id:$sid}), (e:Equipment {name:$eq})
+                MATCH (sess:Session {id:$sid}), (l:Log {id:$lid})
                 CREATE (m:Message {
                     id: $mid,
                     sender: 'bot',
@@ -731,11 +844,11 @@ async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_use
                     protocolId: $pid
                 })
                 MERGE (sess)-[:CONTAINS]->(m)
-                MERGE (m)-[:REFERENCES]->(e)
+                MERGE (m)-[:REFERENCES]->(l)
             """, sid=msg.session_id, mid=bot_msg_id, content=bot_content, 
-                 order=next_order+1, eq=equipment_name, pid=protocol_data["id"])
+                 order=next_order+1, lid=match_rec["log_id"], pid=protocol_data["id"])
         else:
-            bot_content = "I'm analyzing your request. Could you provide more details about the equipment or issue?"
+            # Fallback
             await s.run("""
                 MATCH (sess:Session {id:$sid})
                 CREATE (m:Message {
@@ -747,7 +860,7 @@ async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_use
                 })
                 MERGE (sess)-[:CONTAINS]->(m)
             """, sid=msg.session_id, mid=bot_msg_id, content=bot_content, order=next_order+1)
-    
+
     return {
         "status": "success",
         "userMessage": {
