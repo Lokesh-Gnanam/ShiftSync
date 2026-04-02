@@ -646,6 +646,7 @@ async def get_chat_thread(session_id: str, cu: User = Depends(get_current_user))
             MATCH (sess:Session {id:$sid})-[:CONTAINS]->(m:Message)
             OPTIONAL MATCH (m)-[:REFERENCES]->(l:Log)-[:RESOLVED_BY]->(r:Resolution)
             OPTIONAL MATCH (l)-[:INVOLVES_MACHINE]->(mach:Machine)
+            OPTIONAL MATCH (l)-[:HAS_ROOT_CAUSE]->(rc:RootCause)
             RETURN m.id AS id,
                    m.sender AS sender,
                    m.content AS content,
@@ -655,7 +656,8 @@ async def get_chat_thread(session_id: str, cu: User = Depends(get_current_user))
                    mach.name AS machineName,
                    r.steps AS rawSteps,
                    l.audio_url AS audioUrl,
-                   l.transcript AS transcript
+                   l.transcript AS transcript,
+                   rc.reason AS rootCause
             ORDER BY m.order ASC
         """, sid=session_id)
         rows = await res.data()
@@ -685,6 +687,7 @@ async def get_chat_thread(session_id: str, cu: User = Depends(get_current_user))
             msg["duration"] = "N/A"
             msg["safetyNote"] = get_safety_message(machine_name)
             msg["protocolTranscript"] = row.get("transcript")
+            msg["rootCause"] = row.get("rootCause")
             
             # Form clean steps
             raw_steps = re.split(r'\. |; |\n', row["rawSteps"])
@@ -722,21 +725,29 @@ async def send_chat_message(msg: ChatMessage, cu: User = Depends(get_current_use
                 MERGE (sess)-[:CONTAINS]->(m)
             """, sid=msg.session_id, mid=user_msg_id, content=user_content, order=next_order)
             
-            # Fetch log text
-            res = await s.run("MATCH (l:Log {id:$id}) RETURN l.transcript AS transcript", id=log_id)
+            # Fetch log text, rootcause, and resolution
+            res = await s.run("""
+                MATCH (l:Log {id:$id})
+                OPTIONAL MATCH (l)-[:HAS_ROOT_CAUSE]->(rc:RootCause)
+                OPTIONAL MATCH (l)-[:RESOLVED_BY]->(r:Resolution)
+                RETURN l.transcript AS transcript, rc.reason AS rootcause, r.steps AS resolution
+            """, id=log_id)
             rec = await res.single()
             
-            bot_content = "I couldn't retrieve the transcript for this log."
-            if rec and rec["transcript"]:
-                transcript = rec["transcript"]
+            bot_content = "I couldn't retrieve the details for this log."
+            if rec:
+                transcript = rec.get("transcript") or "No transcript"
+                rootcause = rec.get("rootcause") or "Unknown"
+                resolution = rec.get("resolution") or "Unknown"
                 import httpx
                 try:
                     async with httpx.AsyncClient() as client:
-                        prompt = f"""You are a Senior Industrial AI. A Junior technician asked you to explain a solution. The Senior Technician dictated the following note for the log:
+                        prompt = f"""You are a Senior Industrial AI. A Junior technician asked you to explain a solution. 
+The Senior Technician diagnosed the issue with the following Root Cause: "{rootcause}"
+The proposed resolution steps are: "{resolution}"
+Original dictated transcript for context: "{transcript}"
 
-\"{transcript}\"
-
-Explain this step-by-step for a Junior technician, focusing on safety and clarity. Format it neatly without markdown headers."""
+Using the root cause above, explain step-by-step how to resolve this issue for a Junior technician. Focus on safety, clarity, and the 'why' behind the resolution. Format it neatly without markdown headers."""
                         groq_res = await client.post(
                             "https://api.groq.com/openai/v1/chat/completions",
                             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
@@ -794,6 +805,7 @@ Explain this step-by-step for a Junior technician, focusing on safety and clarit
             MATCH (l:Log)-[:RESOLVED_BY]->(r:Resolution)
             OPTIONAL MATCH (l)-[:INVOLVES_MACHINE]->(mach:Machine)
             OPTIONAL MATCH (l)-[:HAS_ISSUE]       ->(i:Issue)
+            OPTIONAL MATCH (l)-[:HAS_ROOT_CAUSE]  ->(rc:RootCause)
             WHERE toLower(l.transcript) CONTAINS toLower($q)
                OR ($m_q <> '' AND toLower(coalesce(mach.name,'')) CONTAINS toLower($m_q))
                OR ($i_q <> '' AND toLower(coalesce(i.name,'')) CONTAINS toLower($i_q))
@@ -802,7 +814,8 @@ Explain this step-by-step for a Junior technician, focusing on safety and clarit
                    coalesce(i.name, 'Unknown Issue') AS issue,
                    r.steps AS solution,
                    l.audio_url AS audio_url,
-                   l.transcript AS transcript
+                   l.transcript AS transcript,
+                   rc.reason AS rootCause
             ORDER BY l.timestamp DESC LIMIT 1
         """, q=q.lower(), m_q=m_q, i_q=i_q)
         match_rec = await res.single()
@@ -829,7 +842,8 @@ Explain this step-by-step for a Junior technician, focusing on safety and clarit
                 "audioUrl": match_rec["audio_url"],
                 "duration": "N/A",
                 "safetyNote": get_safety_message(machine_name),
-                "transcript": match_rec["transcript"]
+                "transcript": match_rec["transcript"],
+                "rootCause": match_rec["rootCause"]
             }
             
             # Save bot message linking back to the Log

@@ -93,7 +93,9 @@ const JuniorDashboard = () => {
           steps: msg.protocolSteps,
           audioUrl: msg.audioUrl,
           duration: msg.duration,
-          safetyNote: msg.safetyNote
+          safetyNote: msg.safetyNote,
+          transcript: msg.protocolTranscript,
+          rootCause: msg.rootCause
         } : null
       }));
       setMessages(formattedMessages);
@@ -136,10 +138,15 @@ const JuniorDashboard = () => {
     const text = textOverride || inputText;
     if (!text.trim() || !activeSession) return;
 
+    // Hide system text from the user's visible chat bubble
+    const displayContent = text.startsWith('__EXPLAIN__') 
+      ? 'Can you explain this step-by-step for me?' 
+      : text;
+
     const userMsg = {
       id: Date.now().toString(),
       sender: 'user',
-      content: text,
+      content: displayContent,
       timestamp: new Date().toISOString()
     };
 
@@ -313,7 +320,14 @@ const JuniorDashboard = () => {
                       {msg.protocol && (
                         <div className="jd-protocol-card">
                           <h3>{msg.protocol.title}</h3>
-                          <p className="jd-protocol-desc">Follow these steps carefully for safe operation:</p>
+                          
+                          {msg.protocol.rootCause && (
+                            <div className="jd-root-cause">
+                              <strong>Root Cause Diagnosed:</strong> {msg.protocol.rootCause}
+                            </div>
+                          )}
+
+                          <p className="jd-protocol-desc">WHAT TO DO (Feasible Solution):</p>
                           
                           <div className="jd-protocol-steps">
                             {msg.protocol.steps.map((step, i) => (
